@@ -1,25 +1,7 @@
 name: "main"
-scale_along_z: 0
-embedded_instances {
-  id: "screen"
-  data: "components {\n"
-  "  id: \"quad\"\n"
-  "  component: \"/derez/mesh/quad.mesh\"\n"
-  "  position {\n"
-  "    x: 0.0\n"
-  "    y: 0.0\n"
-  "    z: 0.0\n"
-  "  }\n"
-  "  rotation {\n"
-  "    x: 0.0\n"
-  "    y: 0.0\n"
-  "    z: 0.0\n"
-  "    w: 1.0\n"
-  "  }\n"
-  "  property_decls {\n"
-  "  }\n"
-  "}\n"
-  ""
+instances {
+  id: "derez"
+  prototype: "/derez/derez.go"
   position {
     x: 0.0
     y: 0.0
@@ -37,6 +19,7 @@ embedded_instances {
     z: 1.0
   }
 }
+scale_along_z: 0
 embedded_instances {
   id: "quad"
   data: "components {\n"
