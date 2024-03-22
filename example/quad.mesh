@@ -1,0 +1,4 @@
+material: "/example/example.material"
+vertices: "/derez/mesh/quad.buffer"
+textures: "/builtins/assets/images/logo/logo_blue_256.png"
+primitive_type: PRIMITIVE_TRIANGLES

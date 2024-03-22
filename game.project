@@ -1,0 +1,22 @@
+[bootstrap]
+main_collection = /main/main.collectionc
+render = /derez/derez.renderc
+
+[script]
+shared_state = 1
+
+[display]
+height = 540
+
+[android]
+input_method = HiddenInputField
+
+[project]
+title = Derez
+
+[sprite]
+subpixels = 0
+
+[label]
+subpixels = 0
+

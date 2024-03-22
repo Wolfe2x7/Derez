@@ -1,0 +1,6 @@
+function init(self)
+	-- rotate the cube
+	go.animate(".", "euler.z", go.PLAYBACK_LOOP_FORWARD, 360, go.EASING_INOUTQUAD, 6)
+	go.animate(".", "euler.x", go.PLAYBACK_LOOP_FORWARD, 360, go.EASING_INOUTQUAD, 9)
+	go.animate(".", "euler.y", go.PLAYBACK_LOOP_FORWARD, 360, go.EASING_INOUTQUAD, 12)
+end

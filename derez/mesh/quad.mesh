@@ -1,0 +1,4 @@
+material: "/derez/mesh/quad.material"
+vertices: "/derez/mesh/quad.buffer"
+textures: ""
+primitive_type: PRIMITIVE_TRIANGLES

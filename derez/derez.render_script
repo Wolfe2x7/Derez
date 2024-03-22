@@ -1,0 +1,241 @@
+-- message constants
+local MSG_CLEAR_COLOR = hash('clear_color')
+local MSG_WINDOW_RESIZED = hash('window_resized')
+local MSG_SET_VIEW_PROJ = hash('set_view_projection')
+local MSG_USE_PERSPECTIVE_PROJ = hash('use_camera_projection')
+local MSG_DISABLE_PERSPECTIVE_PROJ = hash('use_2D_projection')
+local MSG_SET_RESOLUTION = hash('set_resolution')
+
+local DEFAULT_NEAR = -1
+local DEFAULT_FAR = 1
+
+local RESOLUTION_Y = 180
+
+-- projection for fullscreen quad
+local function get_quad_projection()
+	return vmath.matrix4_orthographic(-1, 1, -1, 1, -1, 1)
+end
+
+local function get_window_aspect(state)
+	return state.window_x / state.window_y
+end
+
+-- main projection
+local function get_main_projection(camera, state)
+	return vmath.matrix4_orthographic(0, state.res_x, 0, state.res_y, camera.near, camera.far)
+end
+
+-- projection for gui
+local function get_gui_projection(camera, state)
+	return vmath.matrix4_orthographic(0, state.res_x, 0, state.res_y, -1, 1)
+end
+
+local function change_clear_color(state, color)
+	if color then
+		state.clear_buffers[render.BUFFER_COLOR_BIT] = color
+	end
+end
+
+local function update_camera(camera, state)
+	camera.proj = camera.projection_fn(camera, state)
+	camera.frustum.frustum = camera.proj * camera.view
+end
+
+local function resize_state(self, state)
+	state.window_x = render.get_window_width()
+	state.window_y = render.get_window_height()
+	state.valid = state.window_x > 0 and state.window_y > 0
+	if not state.valid then
+		return false
+	end
+	-- Make sure state updated only once when resize window
+	if state.window_x == state.prev_window_x and state.window_y == state.prev_window_y then
+		return true
+	end
+	state.prev_window_x = state.window_x
+	state.prev_window_y = state.window_y
+	local aspect = get_window_aspect(state)
+	state.res_x = aspect * state.res_y
+	render.set_render_target_size(self.derez, state.res_x, state.res_y)
+	for _, camera in pairs(state.cameras) do
+		update_camera(camera, state)
+	end
+	return true
+end
+
+local function set_resolution(self, state, new_y)
+	if new_y then
+		local valid = new_y > 0
+		if not valid then
+			return
+		end
+		state.res_y = new_y
+		local aspect = get_window_aspect(state)
+		state.res_x = aspect * state.res_y
+		aspect = render.get_width() / render.get_height()
+		local offset_x = aspect * state.res_y
+		render.set_render_target_size(self.derez, state.res_x, state.res_y)
+	end
+end
+
+local function init_camera(camera, projection_fn, near, far, zoom)
+	camera.view = vmath.matrix4()
+	camera.near = near == nil and DEFAULT_NEAR or near
+	camera.far = far == nil and DEFAULT_FAR or far
+	camera.projection_fn = projection_fn
+end
+
+local function create_predicates(...)
+	local arg = {...}
+	local predicates = {}
+	for _, predicate_name in pairs(arg) do
+		predicates[predicate_name] = render.predicate({predicate_name})
+	end
+	return predicates
+end
+
+local function create_camera(state, name, is_main_camera)
+	local camera = {}
+	camera.frustum = {}
+	state.cameras[name] = camera
+	if is_main_camera then
+		state.main_camera = camera
+	end
+	return camera
+end
+
+local function create_state()
+	local state = {}
+	local color = vmath.vector4(0, 0, 0, 0)
+	color.x = sys.get_config_number('render.clear_color_red', 0)
+	color.y = sys.get_config_number('render.clear_color_green', 0)
+	color.z = sys.get_config_number('render.clear_color_blue', 0)
+	color.w = sys.get_config_number('render.clear_color_alpha', 0)
+	state.clear_buffers = {
+		[render.BUFFER_COLOR_BIT] = color,
+		[render.BUFFER_DEPTH_BIT] = 1,
+		[render.BUFFER_STENCIL_BIT] = 0
+	}
+	state.cameras = {}
+	state.res_y = RESOLUTION_Y
+	local aspect = render.get_width() / render.get_height()
+	state.res_x = aspect * state.res_y
+	return state
+end
+
+function init(self) 
+	self.predicates = create_predicates('tile', 'gui', 'particle', 'model', 'debug_text', 'derez')
+	
+	local state = create_state()
+	self.state = state
+	local camera_world = create_camera(state, 'camera_world', true)
+	init_camera(camera_world, get_main_projection)
+	local camera_gui = create_camera(state, 'camera_gui')
+	init_camera(camera_gui, get_gui_projection)
+	
+	-- render target buffer parameters
+	local color_params = {
+		format = render.FORMAT_RGBA,
+		width = state.res_x,
+		height = state.res_y,
+		min_filter = render.FILTER_NEAREST,
+		mag_filter = render.FILTER_NEAREST,
+		u_wrap = render.WRAP_CLAMP_TO_EDGE,
+		v_wrap = render.WRAP_CLAMP_TO_EDGE
+	}
+	local depth_params = {
+		format = render.FORMAT_DEPTH,
+		width = state.res_x,
+		height = state.res_y,
+		u_wrap = render.WRAP_CLAMP_TO_EDGE,
+		v_wrap = render.WRAP_CLAMP_TO_EDGE
+	}
+	self.derez = render.render_target('derez_target', {[render.BUFFER_COLOR_BIT] = color_params, [render.BUFFER_DEPTH_BIT] = depth_params})
+	
+	resize_state(self, state)
+end
+
+function update(self, dt)
+	local state = self.state
+	if not state.valid then
+		if not resize_state(state) then
+			return
+		end
+	end
+
+	local predicates = self.predicates
+	-- clear screen buffers
+	-- turn on depth_mask and enable render target before `render.clear()` to clear it as well
+	render.set_depth_mask(true)
+	render.set_stencil_mask(0xff)
+	render.enable_render_target(self.derez, render.BUFFER_COLOR_BIT)
+	render.clear(state.clear_buffers)
+
+	-- set viewport to low resolution
+	render.set_viewport(0, 0, state.res_x, state.res_y)
+
+	-- setup camera view and projection
+	local camera_world = state.cameras.camera_world
+	render.set_view(camera_world.view)
+	render.set_projection(camera_world.proj)
+
+	-- set states used for all the world predicates
+	render.set_blend_func(render.BLEND_SRC_ALPHA, render.BLEND_ONE_MINUS_SRC_ALPHA)
+	render.enable_state(render.STATE_DEPTH_TEST)
+
+	-- render `model` predicate for default 3D material to render target
+	render.enable_state(render.STATE_CULL_FACE)
+	render.draw(predicates.model, camera_world.frustum)
+	render.set_depth_mask(false)
+	render.disable_state(render.STATE_CULL_FACE)
+
+	-- render the other components: sprites, tilemaps, particles etc to render target
+	render.enable_state(render.STATE_BLEND)
+	render.draw(predicates.tile, camera_world.frustum)
+	render.draw(predicates.particle, camera_world.frustum)
+	render.disable_state(render.STATE_DEPTH_TEST)
+
+	render.draw_debug3d()
+
+	-- render GUI to render target
+	local camera_gui = state.cameras.camera_gui
+	render.set_view(camera_gui.view)
+	render.set_projection(camera_gui.proj)
+
+	render.enable_state(render.STATE_STENCIL_TEST)
+	render.draw(predicates.gui, camera_gui.frustum)
+	render.draw(predicates.debug_text, camera_gui.frustum)
+	render.disable_state(render.STATE_STENCIL_TEST)
+
+	-- draw the low-resolution target to the derez predicate, for the final render
+	render.set_render_target(render.RENDER_TARGET_DEFAULT)
+	render.enable_texture(0, self.derez)
+	render.set_viewport(0, 0, state.window_x, state.window_y)
+	render.set_view(vmath.matrix4())
+	render.set_projection(get_quad_projection())
+	render.draw(predicates.derez)
+	render.disable_texture(0, self.derez)
+
+	render.disable_state(render.STATE_BLEND)
+end
+
+function on_message(self, message_id, message)
+		local state = self.state
+		local camera = state.main_camera
+		if message_id == MSG_CLEAR_COLOR then
+			change_clear_color(state, message.color)
+		elseif message_id == MSG_WINDOW_RESIZED then
+			resize_state(self, state)
+		elseif message_id == MSG_SET_VIEW_PROJ then
+			camera.view = message.view
+			self.camera_projection = message.projection or vmath.matrix4()
+			update_camera(camera, state)
+		elseif message_id == MSG_USE_PERSPECTIVE_PROJ then
+			camera.projection_fn = function() return self.camera_projection end
+		elseif message_id == MSG_DISABLE_PERSPECTIVE_PROJ then
+			camera.projection_fn = get_main_projection
+		elseif message_id == MSG_SET_RESOLUTION then
+			set_resolution(self, state, message.new_y)
+		end
+	end
+	

@@ -1,0 +1,26 @@
+local projection = false
+
+function init(self)
+	msg.post('.', 'acquire_input_focus')
+	camera.acquire_focus('.')
+end
+
+function on_input(self, action_id, action)
+	if action_id == hash('touch') and action.pressed then
+		if projection then
+			msg.post('@render:', 'use_2D_projection')
+			projection = false
+		else
+			msg.post('@render:', 'use_camera_projection')
+			projection = true
+		end
+		--msg.post('@render:', 'set_resolution', {new_y = 90})
+		-- resize window to update transform of GUI; bug?
+		--msg.post('@render:', 'resize', { width = 640, height = 360} )
+	end
+	if action_id == hash('escape') and action.pressed then
+		local fullscreen = (sys.get_config_int("display.fullscreen", 0) == 1)
+		local arg1 = fullscreen and '--config=display.fullscreen=0' or '--config=display.fullscreen=1'
+		sys.reboot(arg1)
+	end
+end
