@@ -20,3 +20,6 @@ subpixels = 0
 [label]
 subpixels = 0
 
+[library]
+include_dirs = derez
+
