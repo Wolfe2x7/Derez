@@ -1,0 +1,5 @@
+go.property("resolution_y", 240)
+
+function init(self)
+	msg.post('@render:', 'set_resolution', {new_y = self.resolution_y})
+end

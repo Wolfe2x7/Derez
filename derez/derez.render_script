@@ -9,7 +9,7 @@ local MSG_SET_RESOLUTION = hash('set_resolution')
 local DEFAULT_NEAR = -1
 local DEFAULT_FAR = 1
 
-local RESOLUTION_Y = 180
+local RESOLUTION_Y = 240
 
 -- projection for fullscreen quad
 local function get_quad_projection()
@@ -75,6 +75,11 @@ local function set_resolution(self, state, new_y)
 		aspect = render.get_width() / render.get_height()
 		local offset_x = aspect * state.res_y
 		render.set_render_target_size(self.derez, state.res_x, state.res_y)
+		
+		-- ensure cameras are updated
+		for _, camera in pairs(state.cameras) do
+			update_camera(camera, state)
+		end
 	end
 end
 
