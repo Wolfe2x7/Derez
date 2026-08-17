@@ -32,7 +32,7 @@ end
 
 local function change_clear_color(state, color)
 	if color then
-		state.clear_buffers[render.BUFFER_COLOR_BIT] = color
+		state.clear_buffers[graphics.BUFFER_TYPE_COLOR0_BIT] = color
 	end
 end
 
@@ -117,9 +117,9 @@ local function create_state()
 	color.z = sys.get_config_number('render.clear_color_blue', 0)
 	color.w = sys.get_config_number('render.clear_color_alpha', 0)
 	state.clear_buffers = {
-		[render.BUFFER_COLOR_BIT] = color,
-		[render.BUFFER_DEPTH_BIT] = 1,
-		[render.BUFFER_STENCIL_BIT] = 0
+		[graphics.BUFFER_TYPE_COLOR0_BIT] = color,
+		[graphics.BUFFER_TYPE_DEPTH_BIT] = 1,
+		[graphics.BUFFER_TYPE_STENCIL_BIT] = 0
 	}
 	state.cameras = {}
 	state.res_y = RESOLUTION_Y
@@ -140,22 +140,22 @@ function init(self)
 	
 	-- render target buffer parameters
 	local color_params = {
-		format = render.FORMAT_RGBA,
+		format = graphics.TEXTURE_FORMAT_RGBA,
 		width = state.res_x,
 		height = state.res_y,
-		min_filter = render.FILTER_NEAREST,
-		mag_filter = render.FILTER_NEAREST,
-		u_wrap = render.WRAP_CLAMP_TO_EDGE,
-		v_wrap = render.WRAP_CLAMP_TO_EDGE
+		min_filter = graphics.TEXTURE_FILTER_NEAREST,
+		mag_filter = graphics.TEXTURE_FILTER_NEAREST,
+		u_wrap = graphics.TEXTURE_WRAP_CLAMP_TO_EDGE,
+		v_wrap = graphics.TEXTURE_WRAP_CLAMP_TO_EDGE
 	}
 	local depth_params = {
-		format = render.FORMAT_DEPTH,
+		format = graphics.TEXTURE_FORMAT_DEPTH,
 		width = state.res_x,
 		height = state.res_y,
-		u_wrap = render.WRAP_CLAMP_TO_EDGE,
-		v_wrap = render.WRAP_CLAMP_TO_EDGE
+		u_wrap = graphics.TEXTURE_WRAP_CLAMP_TO_EDGE,
+		v_wrap = graphics.TEXTURE_WRAP_CLAMP_TO_EDGE
 	}
-	self.derez = render.render_target('derez_target', {[render.BUFFER_COLOR_BIT] = color_params, [render.BUFFER_DEPTH_BIT] = depth_params})
+	self.derez = render.render_target('derez_target', {[graphics.BUFFER_TYPE_COLOR0_BIT] = color_params, [graphics.BUFFER_TYPE_DEPTH_BIT] = depth_params})
 	
 	resize_state(self, state)
 end
@@ -173,7 +173,7 @@ function update(self, dt)
 	-- turn on depth_mask and enable render target before `render.clear()` to clear it as well
 	render.set_depth_mask(true)
 	render.set_stencil_mask(0xff)
-	render.enable_render_target(self.derez, render.BUFFER_COLOR_BIT)
+	render.set_render_target(self.derez, { transient = { graphics.BUFFER_TYPE_DEPTH_BIT, graphics.BUFFER_TYPE_COLOR0_BIT }} )
 	render.clear(state.clear_buffers)
 
 	-- set viewport to low resolution
@@ -185,20 +185,20 @@ function update(self, dt)
 	render.set_projection(camera_world.proj)
 
 	-- set states used for all the world predicates
-	render.set_blend_func(render.BLEND_SRC_ALPHA, render.BLEND_ONE_MINUS_SRC_ALPHA)
-	render.enable_state(render.STATE_DEPTH_TEST)
+	render.set_blend_func(graphics.BLEND_FACTOR_SRC_ALPHA, graphics.BLEND_FACTOR_ONE_MINUS_SRC_ALPHA)
+	render.enable_state(graphics.STATE_DEPTH_TEST)
 
 	-- render `model` predicate for default 3D material to render target
-	render.enable_state(render.STATE_CULL_FACE)
+	render.enable_state(graphics.STATE_CULL_FACE)
 	render.draw(predicates.model, camera_world.frustum)
 	render.set_depth_mask(false)
-	render.disable_state(render.STATE_CULL_FACE)
+	render.disable_state(graphics.STATE_CULL_FACE)
 
 	-- render the other components: sprites, tilemaps, particles etc to render target
-	render.enable_state(render.STATE_BLEND)
+	render.enable_state(graphics.STATE_BLEND)
 	render.draw(predicates.tile, camera_world.frustum)
 	render.draw(predicates.particle, camera_world.frustum)
-	render.disable_state(render.STATE_DEPTH_TEST)
+	render.disable_state(graphics.STATE_DEPTH_TEST)
 
 	render.draw_debug3d()
 
@@ -207,10 +207,10 @@ function update(self, dt)
 	render.set_view(camera_gui.view)
 	render.set_projection(camera_gui.proj)
 
-	render.enable_state(render.STATE_STENCIL_TEST)
+	render.enable_state(graphics.STATE_STENCIL_TEST)
 	render.draw(predicates.gui, camera_gui.frustum)
 	render.draw(predicates.debug_text, camera_gui.frustum)
-	render.disable_state(render.STATE_STENCIL_TEST)
+	render.disable_state(graphics.STATE_STENCIL_TEST)
 
 	-- draw the low-resolution target to the derez predicate, for the final render
 	render.set_render_target(render.RENDER_TARGET_DEFAULT)
@@ -221,7 +221,7 @@ function update(self, dt)
 	render.draw(predicates.derez)
 	render.disable_texture(0, self.derez)
 
-	render.disable_state(render.STATE_BLEND)
+	render.disable_state(graphics.STATE_BLEND)
 end
 
 function on_message(self, message_id, message)
